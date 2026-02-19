@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" type="image/png">
+  <title>PWA Billing App - Complete Offline Billing Solution</title>
+  <meta name="description" content="Progressive Web Billing Application with offline capabilities, invoice management, and inventory tracking" />
+  <meta name="author" content="MGX" />
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="PWA Billing" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  
+  <!-- Manifest -->
+  <link rel="manifest" href="/manifest.json" />
+  
+  <!-- Apple Touch Icons -->
+  <link rel="apple-touch-icon" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" />
+
+  <!-- Open Graph Meta Tags -->
+  <meta property="og:title" content="PWA Billing App - Complete Offline Billing Solution" />
+  <meta property="og:description" content="Progressive Web Billing Application with offline capabilities, invoice management, and inventory tracking" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" />
+
+  <!-- Twitter Card Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="PWA Billing App" />
+  <meta name="twitter:description" content="Complete offline billing solution with PWA capabilities" />
+  <meta name="twitter:image" content="https://public-frontend-cos.metadl.com/mgx/img/favicon.png" />
+
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+  
+  <!-- PWA Installation Script -->
+  <script>
+    // Check if app is already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      console.log('PWA is running in standalone mode');
+    }
+    
+    // Handle app installation
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,39 @@
+{
+  "name": "Progressive Web Billing App",
+  "short_name": "PWA Billing",
+  "description": "A complete offline-capable billing and invoice management application",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://public-frontend-cos.metadl.com/mgx/img/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "https://public-frontend-cos.metadl.com/mgx/img/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"],
+  "shortcuts": [
+    {
+      "name": "New Invoice",
+      "short_name": "Invoice",
+      "description": "Create a new invoice",
+      "url": "/?action=new-invoice",
+      "icons": [
+        {
+          "src": "https://public-frontend-cos.metadl.com/mgx/img/favicon.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}

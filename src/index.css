@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default theme colors - will be overridden by ThemeProvider */
+  --color-primary: #3b82f6;
+  --color-secondary: #6b7280;
+  --color-accent: #8b5cf6;
+  --color-background: #ffffff;
+  --color-surface: #f8fafc;
+  --color-text: #1f2937;
+  --color-textSecondary: #6b7280;
+  --color-border: #e5e7eb;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    background-color: var(--color-background);
+    color: var(--color-text);
+  }
+}
+
+@layer components {
+  /* Theme-aware component styles */
+  .theme-primary {
+    background-color: var(--color-primary);
+    color: white;
+  }
+  
+  .theme-primary-text {
+    color: var(--color-primary);
+  }
+  
+  .theme-surface {
+    background-color: var(--color-surface);
+  }
+  
+  .theme-border {
+    border-color: var(--color-border);
+  }
+  
+  .theme-success {
+    color: var(--color-success);
+  }
+  
+  .theme-warning {
+    color: var(--color-warning);
+  }
+  
+  .theme-error {
+    color: var(--color-error);
+  }
+  
+  .theme-info {
+    color: var(--color-info);
+  }
+  
+  /* Custom button styles that respect theme */
+  .btn-theme-primary {
+    background-color: var(--color-primary);
+    color: white;
+    border: 1px solid var(--color-primary);
+  }
+  
+  .btn-theme-primary:hover {
+    opacity: 0.9;
+  }
+  
+  .btn-theme-outline {
+    background-color: transparent;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+  }
+  
+  .btn-theme-outline:hover {
+    background-color: var(--color-primary);
+    color: white;
+  }
+  
+  /* Card styles */
+  .card-theme {
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+  }
+  
+  .card-theme-surface {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+  }
+  
+  /* Chart color overrides */
+  .recharts-default-tooltip {
+    background-color: var(--color-background) !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text) !important;
+  }
+  
+  /* Input styles */
+  .input-theme {
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+  
+  .input-theme:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+  }
+  
+  /* Badge styles */
+  .badge-theme-primary {
+    background-color: var(--color-primary);
+    color: white;
+  }
+  
+  .badge-theme-success {
+    background-color: var(--color-success);
+    color: white;
+  }
+  
+  .badge-theme-warning {
+    background-color: var(--color-warning);
+    color: white;
+  }
+  
+  .badge-theme-error {
+    background-color: var(--color-error);
+    color: white;
+  }
+}
+
+/* Scrollbar theming */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+/* Animation for theme transitions */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* Dark theme specific adjustments */
+[data-theme="dark"] {
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: var(--color-border) !important;
+  }
+  
+  .recharts-text {
+    fill: var(--color-textSecondary) !important;
+  }
+}
+
+/* Responsive design helpers */
+@media (max-width: 640px) {
+  .theme-mobile-stack {
+    flex-direction: column;
+  }
+  
+  .theme-mobile-full {
+    width: 100%;
+  }
+}
