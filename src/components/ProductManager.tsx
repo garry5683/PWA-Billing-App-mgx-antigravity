@@ -52,7 +52,9 @@ export function ProductManager({ onBack }: ProductManagerProps) {
   const [formData, setFormData] = useState({
     name: '',
     category: '',
+    costPrice: '',
     unitPrice: '',
+    defaultDiscount: '',
     taxRate: '',
     stockQty: '',
     shortcutKey: ''
@@ -98,7 +100,9 @@ export function ProductManager({ onBack }: ProductManagerProps) {
     setFormData({
       name: '',
       category: '',
+      costPrice: '',
       unitPrice: '',
+      defaultDiscount: '',
       taxRate: '',
       stockQty: '',
       shortcutKey: ''
@@ -112,7 +116,9 @@ export function ProductManager({ onBack }: ProductManagerProps) {
       setFormData({
         name: product.name,
         category: product.category,
+        costPrice: (product.costPrice ?? 0).toString(),
         unitPrice: product.unitPrice.toString(),
+        defaultDiscount: (product.defaultDiscount ?? 0).toString(),
         taxRate: product.taxRate.toString(),
         stockQty: product.stockQty.toString(),
         shortcutKey: product.shortcutKey || ''
@@ -156,7 +162,9 @@ export function ProductManager({ onBack }: ProductManagerProps) {
         productId: editingProduct?.productId || `prod_${Date.now()}`,
         name: formData.name.trim(),
         category: formData.category,
+        costPrice: parseFloat(formData.costPrice) || 0,
         unitPrice: parseFloat(formData.unitPrice),
+        defaultDiscount: parseFloat(formData.defaultDiscount) || 0,
         taxRate: parseFloat(formData.taxRate) || 0,
         stockQty: parseInt(formData.stockQty) || 0,
         shortcutKey: formData.shortcutKey.trim() || undefined,
@@ -311,7 +319,18 @@ export function ProductManager({ onBack }: ProductManagerProps) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="unitPrice">Unit Price *</Label>
+                  <Label htmlFor="costPrice">Cost Price</Label>
+                  <Input
+                    id="costPrice"
+                    type="number"
+                    step="0.01"
+                    value={formData.costPrice}
+                    onChange={(e) => setFormData(prev => ({ ...prev, costPrice: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="unitPrice">Selling Price *</Label>
                   <Input
                     id="unitPrice"
                     type="number"
@@ -322,7 +341,9 @@ export function ProductManager({ onBack }: ProductManagerProps) {
                     required
                   />
                 </div>
-                
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="taxRate">Tax Rate (%)</Label>
                   <Input
@@ -331,6 +352,18 @@ export function ProductManager({ onBack }: ProductManagerProps) {
                     step="0.01"
                     value={formData.taxRate}
                     onChange={(e) => setFormData(prev => ({ ...prev, taxRate: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="defaultDiscount">Default Discount (₹)</Label>
+                  <Input
+                    id="defaultDiscount"
+                    type="number"
+                    step="0.01"
+                    value={formData.defaultDiscount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, defaultDiscount: e.target.value }))}
                     placeholder="0.00"
                   />
                 </div>
@@ -606,10 +639,24 @@ export function ProductManager({ onBack }: ProductManagerProps) {
                               <Badge variant="secondary" className="text-xs">Pending Sync</Badge>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
                             <div>
-                              <span className="text-gray-600">Price:</span>
+                              <span className="text-gray-600">Cost Price:</span>
+                              <p className="font-medium text-orange-600">₹{(product.costPrice ?? 0).toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Sell Price:</span>
                               <p className="font-medium">₹{product.unitPrice.toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Margin:</span>
+                              <p className="font-medium text-green-600">
+                                ₹{(product.unitPrice - (product.costPrice ?? 0)).toFixed(2)}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Discount:</span>
+                              <p className="font-medium text-blue-600">₹{(product.defaultDiscount ?? 0).toFixed(2)}/unit</p>
                             </div>
                             <div>
                               <span className="text-gray-600">Tax Rate:</span>
@@ -618,10 +665,6 @@ export function ProductManager({ onBack }: ProductManagerProps) {
                             <div>
                               <span className="text-gray-600">Stock:</span>
                               <p className="font-medium">{product.stockQty} units</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Value:</span>
-                              <p className="font-medium">₹{(product.unitPrice * product.stockQty).toFixed(2)}</p>
                             </div>
                           </div>
                         </div>

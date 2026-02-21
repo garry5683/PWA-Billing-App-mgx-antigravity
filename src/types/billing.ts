@@ -3,9 +3,11 @@ export interface Product {
   name: string;
   category: string;
   unitPrice: number;
+  costPrice: number; // purchase / cost price (what the owner paid)
+  defaultDiscount: number; // preset discount per unit (₹) applied when added to invoice
   taxRate: number;
   stockQty: number;
-  shortcutKey?: string; // New field for shortcut keys
+  shortcutKey?: string;
   syncStatus: "synced" | "pending";
   lastModified: Date;
 }
@@ -25,9 +27,13 @@ export interface InvoiceLineItem {
   productId: string;
   productName: string;
   qty: number;
-  price: number;
-  tax: number;
-  lineTotal: number;
+  price: number; // overridable selling unit price (does not affect catalog)
+  costPrice: number; // snapshot of cost price at billing time (internal)
+  taxRate: number; // overridable tax % (does not affect catalog)
+  discount: number; // per-unit discount in ₹/unit  (total discount = discount × qty)
+  discountedPrice: number; // net unit price after discount: price − discount
+  tax: number; // computed on net price: (price − discount) × qty × taxRate / 100
+  lineTotal: number; // computed: discountedPrice × qty + tax
 }
 
 export interface Invoice {

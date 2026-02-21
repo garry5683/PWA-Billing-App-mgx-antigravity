@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
@@ -62,6 +62,8 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
 
   const productSearchRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Map of productId → quantity <input> element for focus management
+  const quantityRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   const storeInfo = {
     name: 'Your Store Name',
@@ -127,19 +129,39 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
   };
 
   const filterProducts = () => {
+    const availableProducts = products.filter(product => product.stockQty > 0);
+
     if (!productSearch.trim()) {
-      setFilteredProducts([]);
-      setShowProductDropdown(false);
+      // Show all in-stock products when search box is focused but empty
+      setFilteredProducts(availableProducts.slice(0, 10));
       return;
     }
 
-    const availableProducts = products.filter(product => product.stockQty > 0);
-    const filtered = availableProducts.filter(product =>
-      product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-      (product.shortcutKey && product.shortcutKey.toLowerCase().includes(productSearch.toLowerCase())) ||
-      product.category.toLowerCase().includes(productSearch.toLowerCase())
-    );
-    
+    const query = productSearch.toLowerCase().trim();
+
+    // Score each product: higher = more relevant
+    // 3 = exact shortcut key match, 2 = shortcut key contains query, 1 = name/category match
+    const scored = availableProducts
+      .map(product => {
+        const shortcut = product.shortcutKey?.toLowerCase() ?? '';
+        const name = product.name.toLowerCase();
+        const category = product.category.toLowerCase();
+
+        let score = 0;
+        if (shortcut === query) {
+          score = 3; // exact shortcut match — highest priority
+        } else if (shortcut.includes(query)) {
+          score = 2; // partial shortcut match
+        } else if (name.includes(query) || category.includes(query)) {
+          score = 1; // name / category match
+        }
+
+        return { product, score };
+      })
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    const filtered = scored.map(({ product }) => product);
     setFilteredProducts(filtered.slice(0, 10));
     setShowProductDropdown(filtered.length > 0);
     setHighlightedIndex(-1);
@@ -155,18 +177,14 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
   );
 
   const handleProductSearchFocus = () => {
-    if (productSearch.trim() && filteredProducts.length > 0) {
-      setShowProductDropdown(true);
-    }
+    // Always open the dropdown on focus — show filtered or all products
+    setShowProductDropdown(filteredProducts.length > 0);
   };
 
   const handleProductSearchChange = (value: string) => {
     setProductSearch(value);
-    if (value.trim()) {
-      setShowProductDropdown(true);
-    } else {
-      setShowProductDropdown(false);
-    }
+    // Always show dropdown while the input has focus
+    setShowProductDropdown(true);
   };
 
   const handleProductSearchKeyDown = (e: React.KeyboardEvent) => {
@@ -267,17 +285,19 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
     
     if (existingItemIndex >= 0) {
       const updatedItems = [...invoiceItems];
-      const newQty = updatedItems[existingItemIndex].qty + quantity;
+      const item = updatedItems[existingItemIndex];
+      const newQty = item.qty + quantity;
       
       if (newQty > product.stockQty) {
         toast.error(`Only ${product.stockQty} units available in stock`);
         return;
       }
       
-      updatedItems[existingItemIndex].qty = newQty;
-      updatedItems[existingItemIndex].tax = (product.unitPrice * newQty * product.taxRate) / 100;
-      updatedItems[existingItemIndex].lineTotal = (product.unitPrice * newQty) + updatedItems[existingItemIndex].tax;
-      
+      // discount is per-unit — qty change doesn't affect per-unit discount
+      const discountedPrice = item.price - item.discount;
+      const tax = (discountedPrice * newQty * item.taxRate) / 100;
+      const lineTotal = discountedPrice * newQty + tax;
+      updatedItems[existingItemIndex] = { ...item, qty: newQty, discountedPrice, tax, lineTotal };
       setInvoiceItems(updatedItems);
     } else {
       if (quantity > product.stockQty) {
@@ -285,68 +305,94 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
         return;
       }
       
-      const tax = (product.unitPrice * quantity * product.taxRate) / 100;
-      const lineTotal = (product.unitPrice * quantity) + tax;
-      
+      const discount = product.defaultDiscount ?? 0;          // per-unit
+      const discountedPrice = product.unitPrice - discount;   // net unit price
+      const tax = (discountedPrice * quantity * product.taxRate) / 100;
       const newItem: InvoiceLineItem = {
         productId: product.productId,
         productName: product.name,
         qty: quantity,
         price: product.unitPrice,
-        tax: tax,
-        lineTotal: lineTotal
+        costPrice: product.costPrice ?? 0,
+        taxRate: product.taxRate,
+        discount,
+        discountedPrice,
+        tax,
+        lineTotal: discountedPrice * quantity + tax
       };
-      
-      setInvoiceItems([...invoiceItems, newItem]);
+      setInvoiceItems(prev => [...prev, newItem]);
     }
     
     setProductSearch('');
     setShowProductDropdown(false);
     setHighlightedIndex(-1);
     toast.success(`Added ${product.name} to invoice`);
+
+    setTimeout(() => {
+      quantityRefs.current.get(product.productId)?.focus();
+    }, 50);
   };
 
   const updateItemQuantity = (productId: string, newQty: number) => {
-    if (newQty <= 0) {
-      removeItem(productId);
-      return;
-    }
-
+    if (newQty <= 0) { removeItem(productId); return; }
     const product = products.find(p => p.productId === productId);
     if (!product) return;
-
     if (newQty > product.stockQty) {
       toast.error(`Only ${product.stockQty} units available in stock`);
       return;
     }
+    setInvoiceItems(prev => prev.map(item => {
+      if (item.productId !== productId) return item;
+      // discount is per-unit — re-compute tax & total with new qty
+      const discountedPrice = item.price - item.discount;
+      const tax = (discountedPrice * newQty * item.taxRate) / 100;
+      return { ...item, qty: newQty, discountedPrice, tax, lineTotal: discountedPrice * newQty + tax };
+    }));
+  };
 
-    const updatedItems = invoiceItems.map(item => {
-      if (item.productId === productId) {
-        const tax = (product.unitPrice * newQty * product.taxRate) / 100;
-        const lineTotal = (product.unitPrice * newQty) + tax;
-        return {
-          ...item,
-          qty: newQty,
-          tax: tax,
-          lineTotal: lineTotal
-        };
-      }
-      return item;
-    });
+  const updateItemPrice = (productId: string, newPrice: number) => {
+    setInvoiceItems(prev => prev.map(item => {
+      if (item.productId !== productId) return item;
+      const price = Math.max(0, newPrice);
+      const discountedPrice = price - item.discount;
+      const tax = (discountedPrice * item.qty * item.taxRate) / 100;
+      return { ...item, price, discountedPrice, tax, lineTotal: discountedPrice * item.qty + tax };
+    }));
+  };
 
-    setInvoiceItems(updatedItems);
+  const updateItemTaxRate = (productId: string, newRate: number) => {
+    setInvoiceItems(prev => prev.map(item => {
+      if (item.productId !== productId) return item;
+      const taxRate = Math.max(0, newRate);
+      const discountedPrice = item.price - item.discount;
+      const tax = (discountedPrice * item.qty * taxRate) / 100;
+      return { ...item, taxRate, tax, lineTotal: discountedPrice * item.qty + tax };
+    }));
+  };
+
+  const updateItemDiscount = (productId: string, newDiscount: number) => {
+    setInvoiceItems(prev => prev.map(item => {
+      if (item.productId !== productId) return item;
+      const discount = Math.max(0, newDiscount);         // per-unit ₹
+      const discountedPrice = item.price - discount;     // net unit price
+      const tax = (discountedPrice * item.qty * item.taxRate) / 100;
+      return { ...item, discount, discountedPrice, tax, lineTotal: discountedPrice * item.qty + tax };
+    }));
   };
 
   const removeItem = (productId: string) => {
-    setInvoiceItems(invoiceItems.filter(item => item.productId !== productId));
+    setInvoiceItems(prev => prev.filter(item => item.productId !== productId));
   };
 
   const calculateTotals = () => {
-    const subtotal = invoiceItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    // subtotal = net (discounted) price × qty — what customer actually pays before tax
+    const subtotal = invoiceItems.reduce((sum, item) => sum + item.discountedPrice * item.qty, 0);
     const totalTax = invoiceItems.reduce((sum, item) => sum + item.tax, 0);
+    // total item discounts = per-unit discount × qty for each item
+    const totalItemDiscounts = invoiceItems.reduce((sum, item) => sum + item.discount * item.qty, 0);
+    // grand total after all discounts + tax, minus invoice-level extra discount
     const totalAmount = subtotal + totalTax - discount;
-
-    return { subtotal, totalTax, totalAmount };
+    return { subtotal, totalTax, totalItemDiscounts, totalAmount };
   };
 
   const saveInvoice = async () => {
@@ -407,7 +453,7 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
     }
   };
 
-  const { subtotal, totalTax, totalAmount } = calculateTotals();
+  const { subtotal, totalTax, totalItemDiscounts, totalAmount } = calculateTotals();
 
   return (
     <div className="p-4 space-y-6">
@@ -794,7 +840,7 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
                 </div>
               )}
 
-              {/* No results message */}
+              {/* No results message — only when search text has no matches */}
               {productSearch && !showProductDropdown && (
                 <div
                   className="absolute z-50 w-full mt-1 rounded-lg shadow-lg p-4 text-center border"
@@ -823,6 +869,9 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
             <CardTitle className="flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
               <ShoppingCart className="h-5 w-5" style={{ color: 'var(--color-primary)' }} />
               Invoice Items ({invoiceItems.length})
+              <span className="ml-auto text-xs font-normal" style={{ color: 'var(--color-textSecondary)' }}>
+                Price &amp; tax edits apply to this bill only
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -830,12 +879,25 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead style={{ color: 'var(--color-text)' }}>Product</TableHead>
-                    <TableHead className="text-right" style={{ color: 'var(--color-text)' }}>Price</TableHead>
-                    <TableHead className="text-center" style={{ color: 'var(--color-text)' }}>Quantity</TableHead>
-                    <TableHead className="text-right" style={{ color: 'var(--color-text)' }}>Tax</TableHead>
-                    <TableHead className="text-right" style={{ color: 'var(--color-text)' }}>Total</TableHead>
-                    <TableHead className="text-center" style={{ color: 'var(--color-text)' }}>Actions</TableHead>
+                    {/* 1. Product */}
+                    <TableHead className="min-w-[140px]" style={{ color: 'var(--color-text)' }}>Product</TableHead>
+                    {/* 2. Qty */}
+                    <TableHead className="text-center w-20" style={{ color: 'var(--color-text)' }}>Qty</TableHead>
+                    {/* 3. Cost (internal) */}
+                    <TableHead className="text-right w-24" style={{ color: 'var(--color-textSecondary)' }}>Cost ₹</TableHead>
+                    {/* 4. Selling price (editable) */}
+                    <TableHead className="text-right w-28" style={{ color: 'var(--color-text)' }}>Sell ₹</TableHead>
+                    {/* 5. Discount per unit (editable) */}
+                    <TableHead className="text-right w-28" style={{ color: 'var(--color-text)' }}>Disc/unit ₹</TableHead>
+                    {/* 6. Net price after discount */}
+                    <TableHead className="text-right w-28" style={{ color: 'var(--color-success)' }}>Net ₹</TableHead>
+                    {/* 7. Tax rate (editable) */}
+                    <TableHead className="text-right w-24" style={{ color: 'var(--color-text)' }}>Tax %</TableHead>
+                    {/* 8. Tax amount (computed) */}
+                    <TableHead className="text-right w-28" style={{ color: 'var(--color-textSecondary)' }}>Tax ₹</TableHead>
+                    {/* 9. Line total */}
+                    <TableHead className="text-right w-28" style={{ color: 'var(--color-text)' }}>Total ₹</TableHead>
+                    <TableHead className="text-center w-16"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -843,38 +905,115 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
                     const product = products.find(p => p.productId === item.productId);
                     return (
                       <TableRow key={item.productId}>
+
+                        {/* 1 — Product name + shortcut */}
                         <TableCell>
-                          <div>
-                            <div className="font-medium" style={{ color: 'var(--color-text)' }}>{item.productName}</div>
-                            {product?.shortcutKey && (
-                              <Badge variant="outline" className="text-xs mt-1">
-                                <Keyboard className="h-3 w-3 mr-1" />
-                                {product.shortcutKey}
-                              </Badge>
-                            )}
-                          </div>
+                          <div className="font-medium" style={{ color: 'var(--color-text)' }}>{item.productName}</div>
+                          {product?.shortcutKey && (
+                            <Badge variant="outline" className="text-xs mt-1">
+                              <Keyboard className="h-3 w-3 mr-1" />
+                              {product.shortcutKey}
+                            </Badge>
+                          )}
                         </TableCell>
-                        <TableCell className="text-right" style={{ color: 'var(--color-text)' }}>₹{item.price.toFixed(2)}</TableCell>
+
+                        {/* 2 — Qty (editable) */}
                         <TableCell className="text-center">
                           <Input
                             type="number"
                             value={item.qty}
                             onChange={(e) => updateItemQuantity(item.productId, parseInt(e.target.value) || 0)}
-                            className="w-16 h-8 text-center"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                productSearchRef.current?.focus();
+                                setShowProductDropdown(true);
+                              }
+                            }}
+                            ref={(el) => {
+                              if (el) quantityRefs.current.set(item.productId, el);
+                              else quantityRefs.current.delete(item.productId);
+                            }}
+                            className="w-16 h-8 text-center mx-auto"
                             min="1"
+                            onFocus={(e) => e.target.select()}
                           />
                         </TableCell>
-                        <TableCell className="text-right" style={{ color: 'var(--color-textSecondary)' }}>₹{item.tax.toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-medium" style={{ color: 'var(--color-text)' }}>₹{item.lineTotal.toFixed(2)}</TableCell>
+
+                        {/* 3 — Cost price (read-only, internal) */}
+                        <TableCell className="text-right">
+                          <span className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                            ₹{item.costPrice.toFixed(2)}
+                          </span>
+                        </TableCell>
+
+                        {/* 4 — Selling price (editable) */}
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            value={item.price}
+                            onChange={(e) => updateItemPrice(item.productId, parseFloat(e.target.value) || 0)}
+                            className="w-24 h-8 text-right ml-auto"
+                            min="0"
+                            step="0.01"
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </TableCell>
+
+                        {/* 5 — Discount per unit (editable) */}
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            value={item.discount}
+                            onChange={(e) => updateItemDiscount(item.productId, parseFloat(e.target.value) || 0)}
+                            className="w-24 h-8 text-right ml-auto"
+                            min="0"
+                            step="0.50"
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </TableCell>
+
+                        {/* 6 — Net price per unit (Sell − Disc, read-only green) */}
+                        <TableCell className="text-right font-semibold" style={{ color: 'var(--color-success)' }}>
+                          ₹{item.discountedPrice.toFixed(2)}
+                        </TableCell>
+
+                        {/* 7 — Tax rate (editable) */}
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Input
+                              type="number"
+                              value={item.taxRate}
+                              onChange={(e) => updateItemTaxRate(item.productId, parseFloat(e.target.value) || 0)}
+                              className="w-16 h-8 text-right"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              onFocus={(e) => e.target.select()}
+                            />
+                            <span className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>%</span>
+                          </div>
+                        </TableCell>
+
+                        {/* 8 — Tax amount on net price (read-only) */}
+                        <TableCell className="text-right">
+                          <span className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                            ₹{item.tax.toFixed(2)}
+                          </span>
+                        </TableCell>
+
+                        {/* 9 — Line total = Net × Qty + Tax */}
+                        <TableCell className="text-right font-bold" style={{ color: 'var(--color-text)' }}>
+                          ₹{item.lineTotal.toFixed(2)}
+                        </TableCell>
+
+                        {/* Delete */}
                         <TableCell className="text-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => removeItem(item.productId)}
-                          >
+                          <Button variant="outline" size="sm" onClick={() => removeItem(item.productId)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
+
                       </TableRow>
                     );
                   })}
@@ -888,10 +1027,7 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
       {/* Invoice Summary */}
       <Card
         className="border-2"
-        style={{
-          backgroundColor: 'var(--color-surface)',
-          borderColor: 'var(--color-border)'
-        }}
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
         <CardHeader>
           <CardTitle className="flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
@@ -908,43 +1044,56 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span style={{ color: 'var(--color-textSecondary)' }}>Items:</span>
-                <span className="font-medium" style={{ color: 'var(--color-text)' }}>{invoiceItems.length} item(s)</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span style={{ color: 'var(--color-textSecondary)' }}>Subtotal:</span>
-                <span className="font-medium" style={{ color: 'var(--color-text)' }}>₹{subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span style={{ color: 'var(--color-textSecondary)' }}>Tax:</span>
-                <span className="font-medium" style={{ color: 'var(--color-text)' }}>₹{totalTax.toFixed(2)}</span>
-              </div>
+          {/* Totals breakdown — right-aligned, clean rows */}
+          <div className="max-w-sm ml-auto space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--color-textSecondary)' }}>Items</span>
+              <span className="font-medium" style={{ color: 'var(--color-text)' }}>{invoiceItems.length}</span>
             </div>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <Label htmlFor="discount" className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>Discount:</Label>
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--color-textSecondary)' }}>Subtotal</span>
+              <span className="font-medium" style={{ color: 'var(--color-text)' }}>₹{subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--color-textSecondary)' }}>Total Tax</span>
+              <span className="font-medium" style={{ color: 'var(--color-text)' }}>₹{totalTax.toFixed(2)}</span>
+            </div>
+
+            {totalItemDiscounts > 0 && (
+              <div className="flex justify-between">
+                <span style={{ color: 'var(--color-textSecondary)' }}>Item Discounts</span>
+                <span className="font-medium" style={{ color: 'var(--color-success)' }}>− ₹{totalItemDiscounts.toFixed(2)}</span>
+              </div>
+            )}
+
+            {/* Extra invoice-level discount */}
+            <div className="flex justify-between items-center pt-1">
+              <label htmlFor="invoice-discount" className="" style={{ color: 'var(--color-textSecondary)' }}>
+                Extra Discount
+              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>₹</span>
                 <Input
-                  id="discount"
+                  id="invoice-discount"
                   type="number"
                   value={discount}
                   onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
                   className="w-24 h-8 text-right"
                   placeholder="0"
+                  min="0"
                 />
               </div>
-              <div className="border-t pt-3" style={{ borderColor: 'var(--color-border)' }}>
-                <div className="flex justify-between font-bold text-xl">
-                  <span style={{ color: 'var(--color-text)' }}>Total Amount:</span>
-                  <span style={{ color: 'var(--color-success)' }}>₹{totalAmount.toFixed(2)}</span>
-                </div>
-              </div>
+            </div>
+
+            <div
+              className="flex justify-between font-bold text-xl pt-3 border-t"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <span style={{ color: 'var(--color-text)' }}>Grand Total</span>
+              <span style={{ color: 'var(--color-success)' }}>₹{totalAmount.toFixed(2)}</span>
             </div>
           </div>
-          
+
           {invoiceItems.length > 0 && (
             <div className="mt-6 pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <Button
@@ -953,7 +1102,7 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
                 style={{ backgroundColor: 'var(--color-success)', color: '#fff' }}
               >
                 <Receipt className="h-5 w-5 mr-2" />
-                Save Invoice & Generate PDF
+                Save Invoice &amp; Generate PDF
               </Button>
             </div>
           )}
