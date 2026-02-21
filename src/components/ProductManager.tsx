@@ -47,6 +47,7 @@ export function ProductManager({ onBack }: ProductManagerProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'low-stock' | 'out-of-stock'>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({
@@ -70,7 +71,7 @@ export function ProductManager({ onBack }: ProductManagerProps) {
 
   useEffect(() => {
     filterProducts();
-  }, [products, searchQuery]);
+  }, [products, searchQuery, stockFilter]);
 
   const loadProducts = async () => {
     try {
@@ -83,17 +84,23 @@ export function ProductManager({ onBack }: ProductManagerProps) {
   };
 
   const filterProducts = () => {
-    if (!searchQuery.trim()) {
-      setFilteredProducts(products);
-      return;
+    let result = products;
+
+    // Text search filter
+    if (searchQuery.trim()) {
+      result = result.filter(product =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (product.shortcutKey && product.shortcutKey.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
     }
 
-    const filtered = products.filter(product =>
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (product.shortcutKey && product.shortcutKey.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
-    setFilteredProducts(filtered);
+    // Stock status filter
+    if (stockFilter === 'in-stock')    result = result.filter(p => p.stockQty >= 10);
+    if (stockFilter === 'low-stock')   result = result.filter(p => p.stockQty > 0 && p.stockQty < 10);
+    if (stockFilter === 'out-of-stock') result = result.filter(p => p.stockQty === 0);
+
+    setFilteredProducts(result);
   };
 
   const resetForm = () => {
@@ -205,9 +212,9 @@ export function ProductManager({ onBack }: ProductManagerProps) {
   };
 
   const getStockStatus = (quantity: number) => {
-    if (quantity === 0) return { label: 'Out of Stock', variant: 'destructive' as const };
-    if (quantity < 10) return { label: 'Low Stock', variant: 'secondary' as const };
-    return { label: 'In Stock', variant: 'default' as const };
+    if (quantity === 0) return { label: 'Out of Stock', className: 'bg-red-100 text-red-700 border border-red-300' };
+    if (quantity < 10)  return { label: 'Low Stock',    className: 'bg-orange-100 text-orange-700 border border-orange-300' };
+    return                     { label: 'In Stock',     className: 'bg-green-100 text-green-700 border border-green-300' };
   };
 
   // Chart data preparation
@@ -588,15 +595,28 @@ export function ProductManager({ onBack }: ProductManagerProps) {
         </TabsContent>
 
         <TabsContent value="products" className="space-y-4 sm:space-y-6">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search products by name, category, or shortcut key..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          {/* Search + Stock Filter */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search products by name, category, or shortcut key..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as typeof stockFilter)}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Filter by stock" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Products</SelectItem>
+                <SelectItem value="in-stock">✅ In Stock</SelectItem>
+                <SelectItem value="low-stock">🟠 Low Stock</SelectItem>
+                <SelectItem value="out-of-stock">🔴 Out of Stock</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Products List */}
@@ -634,9 +654,14 @@ export function ProductManager({ onBack }: ProductManagerProps) {
                               </Badge>
                             )}
                             <Badge variant="outline" className="text-xs">{product.category}</Badge>
-                            <Badge variant={stockStatus.variant} className="text-xs">{stockStatus.label}</Badge>
+                            {/* Stock status badge */}
+                            <Badge className={`text-xs ${stockStatus.className}`}>{stockStatus.label}</Badge>
+                            {/* Sync status badge */}
                             {product.syncStatus === 'pending' && (
-                              <Badge variant="secondary" className="text-xs">Pending Sync</Badge>
+                              <Badge className="text-xs bg-red-50 text-red-700 border border-red-500">Pending Sync</Badge>
+                            )}
+                            {product.syncStatus === 'synced' && (
+                              <Badge className="text-xs bg-green-50 text-green-700 border border-green-500">Synced</Badge>
                             )}
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">

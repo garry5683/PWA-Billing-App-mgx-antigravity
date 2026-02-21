@@ -447,6 +447,12 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
       
       toast.success('Invoice created successfully');
       await loadData();
+
+      // Restore focus to the product search so page is immediately interactive
+      setTimeout(() => {
+        window.focus();
+        productSearchRef.current?.focus();
+      }, 500);
     } catch (error) {
       console.error('Error saving invoice:', error);
       toast.error('Failed to save invoice');

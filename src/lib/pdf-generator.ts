@@ -13,9 +13,18 @@ export class PDFGenerator {
 
     printWindow.onload = () => {
       setTimeout(() => {
+        // Close popup and restore focus to parent window after print dialog is dismissed
+        printWindow.addEventListener("afterprint", () => {
+          printWindow.close();
+          window.focus(); // return focus to the billing page
+        });
         printWindow.print();
-        printWindow.close();
-      }, 250);
+        // Fallback: if afterprint doesn't fire (some browsers), close after a delay
+        setTimeout(() => {
+          if (!printWindow.closed) printWindow.close();
+          window.focus();
+        }, 1000);
+      }, 300);
     };
   }
 
