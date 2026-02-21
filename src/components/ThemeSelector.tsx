@@ -59,7 +59,7 @@ export function ThemeSelector() {
             <Palette className="h-5 w-5" />
             Choose Your Theme
           </DialogTitle>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>
             Customize the appearance of your billing application
           </p>
         </DialogHeader>
@@ -77,7 +77,7 @@ export function ThemeSelector() {
                 }`}
                 style={{ 
                   borderColor: theme.colors.primary,
-                  ringColor: isSelected ? theme.colors.primary : 'transparent'
+                  ...(isSelected && { '--tw-ring-color': theme.colors.primary } as React.CSSProperties)
                 }}
                 onClick={() => handleThemeChange(theme.id)}
               >
@@ -187,12 +187,18 @@ export function ThemeSelector() {
           })}
         </div>
         
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-          <h4 className="font-medium mb-2 flex items-center gap-2">
+        <div
+          className="mt-6 p-4 rounded-lg"
+          style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        >
+          <h4
+            className="font-medium mb-2 flex items-center gap-2"
+            style={{ color: 'var(--color-text)' }}
+          >
             <Palette className="h-4 w-4" />
             Theme Features
           </h4>
-          <ul className="text-sm text-gray-600 space-y-1">
+          <ul className="text-sm space-y-1" style={{ color: 'var(--color-textSecondary)' }}>
             <li>• Automatic theme persistence across sessions</li>
             <li>• Responsive design that adapts to all themes</li>
             <li>• Optimized for both light and dark preferences</li>

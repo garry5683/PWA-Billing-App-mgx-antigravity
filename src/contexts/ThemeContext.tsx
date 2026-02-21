@@ -1,5 +1,27 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+// Convert a hex color string to "H S% L%" format for Tailwind HSL CSS variables
+function hexToHsl(hex: string): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return '0 0% 0%';
+  const r = parseInt(result[1], 16) / 255;
+  const g = parseInt(result[2], 16) / 255;
+  const b = parseInt(result[3], 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
+
 export interface Theme {
   id: string;
   name: string;
@@ -197,11 +219,46 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   useEffect(() => {
-    // Apply theme colors to CSS custom properties
     const root = document.documentElement;
-    Object.entries(currentTheme.colors).forEach(([key, value]) => {
+    const c = currentTheme.colors;
+
+    // Apply --color-* custom properties (used by hand-written components)
+    Object.entries(c).forEach(([key, value]) => {
       root.style.setProperty(`--color-${key}`, value);
     });
+
+    // Derive a foreground color: white for dark backgrounds, dark text otherwise
+    const isDarkBg = c.background === '#111827' || c.surface === '#1f2937';
+    const fgHsl = isDarkBg ? hexToHsl(c.text) : hexToHsl('#1f2937');
+    const mutedFgHsl = hexToHsl(c.textSecondary);
+    const bgHsl = hexToHsl(c.background);
+    const surfaceHsl = hexToHsl(c.surface);
+    const borderHsl = hexToHsl(c.border);
+    const primaryHsl = hexToHsl(c.primary);
+    const primaryFgHsl = isDarkBg ? hexToHsl(c.text) : '0 0% 100%';
+    const accentHsl = hexToHsl(c.surface);
+    const accentFgHsl = fgHsl;
+
+    // Bridge to Tailwind / shadcn CSS HSL variables used by Dialog, Popover, Select, Sheet, etc.
+    root.style.setProperty('--background', bgHsl);
+    root.style.setProperty('--foreground', fgHsl);
+    root.style.setProperty('--card', bgHsl);
+    root.style.setProperty('--card-foreground', fgHsl);
+    root.style.setProperty('--popover', bgHsl);
+    root.style.setProperty('--popover-foreground', fgHsl);
+    root.style.setProperty('--primary', primaryHsl);
+    root.style.setProperty('--primary-foreground', primaryFgHsl);
+    root.style.setProperty('--secondary', surfaceHsl);
+    root.style.setProperty('--secondary-foreground', fgHsl);
+    root.style.setProperty('--muted', surfaceHsl);
+    root.style.setProperty('--muted-foreground', mutedFgHsl);
+    root.style.setProperty('--accent', accentHsl);
+    root.style.setProperty('--accent-foreground', accentFgHsl);
+    root.style.setProperty('--destructive', hexToHsl(c.error));
+    root.style.setProperty('--destructive-foreground', '0 0% 100%');
+    root.style.setProperty('--border', borderHsl);
+    root.style.setProperty('--input', borderHsl);
+    root.style.setProperty('--ring', primaryHsl);
   }, [currentTheme]);
 
   const setTheme = (themeId: string) => {
