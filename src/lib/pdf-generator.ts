@@ -1,4 +1,6 @@
 import { Invoice, StoreInfo } from "@/types/billing";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 export class PDFGenerator {
   static async generateInvoicePDF(
@@ -13,13 +15,11 @@ export class PDFGenerator {
 
     printWindow.onload = () => {
       setTimeout(() => {
-        // Close popup and restore focus to parent window after print dialog is dismissed
         printWindow.addEventListener("afterprint", () => {
           printWindow.close();
-          window.focus(); // return focus to the billing page
+          window.focus();
         });
         printWindow.print();
-        // Fallback: if afterprint doesn't fire (some browsers), close after a delay
         setTimeout(() => {
           if (!printWindow.closed) printWindow.close();
           window.focus();
@@ -32,16 +32,80 @@ export class PDFGenerator {
     invoice: Invoice,
     storeInfo: StoreInfo,
   ): Promise<void> {
-    const htmlContent = this.generateInvoiceHTML(invoice, storeInfo);
-    const blob = new Blob([htmlContent], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `invoice-${invoice.invoiceId}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const html = this.generateInvoiceHTML(invoice, storeInfo);
+
+    // Use a hidden iframe so the full HTML document (body styles, margins, etc.)
+    // renders correctly — and there's zero visible flicker.
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = `
+      position: fixed;
+      top: 0; left: 0;
+      width: 210mm;
+      height: 297mm;
+      opacity: 0;
+      pointer-events: none;
+      border: none;
+    `;
+    document.body.appendChild(iframe);
+
+    await new Promise<void>((resolve) => {
+      iframe.onload = () => resolve();
+      iframe.srcdoc = html;
+    });
+
+    // Give the iframe's styles an extra tick to fully paint
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    try {
+      const iframeDoc = iframe.contentDocument!;
+      const body = iframeDoc.body;
+
+      // Expand the body to its full scroll height so nothing is clipped
+      const scrollHeight = iframeDoc.documentElement.scrollHeight;
+      iframe.style.height = `${scrollHeight}px`;
+      body.style.margin = "0";
+      body.style.padding = "20px";
+      body.style.boxSizing = "border-box";
+
+      const canvas = await html2canvas(body, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        windowWidth: 794, // A4 at 96 dpi (~210mm)
+        windowHeight: scrollHeight,
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10; // mm padding inside the PDF
+      const printWidth = pageWidth - margin * 2;
+      const imgHeight = (canvas.height * printWidth) / canvas.width;
+
+      let yPos = margin;
+      let remainingHeight = imgHeight;
+
+      // Multi-page: slice the image across pages
+      while (remainingHeight > 0) {
+        pdf.addImage(imgData, "PNG", margin, yPos, printWidth, imgHeight);
+        remainingHeight -= pageHeight - margin * 2;
+        if (remainingHeight > 0) {
+          pdf.addPage();
+          yPos = margin - (imgHeight - remainingHeight);
+        }
+      }
+
+      pdf.save(`Invoice-${invoice.invoiceId}.pdf`);
+    } finally {
+      document.body.removeChild(iframe);
+    }
   }
 
   private static generateInvoiceHTML(

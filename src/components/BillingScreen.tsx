@@ -19,11 +19,13 @@ import {
   X,
   Wallet,
   Pencil,
+  Printer,
   Check
 } from 'lucide-react';
 import { billingDB, CASH_IN_HAND_CUSTOMER_ID } from '@/lib/database';
 import { Product, Customer, Invoice, InvoiceLineItem } from '@/types/billing';
 import { PDFGenerator } from '@/lib/pdf-generator';
+import { thermalPrinter } from '@/lib/thermal-printer';
 import { toast } from 'sonner';
 
 interface BillingScreenProps {
@@ -435,8 +437,7 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
         }
       }
 
-      // Generate PDF
-      await PDFGenerator.generateInvoicePDF(invoice, storeInfo);
+      // PDF generation removed per user request - thermal print handles physical copy
 
       // Reset form but keep Cash-in-Hand selected
       const cashCustomer = await billingDB.getCashInHandCustomer();
@@ -448,6 +449,9 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
       toast.success('Invoice created successfully');
       await loadData();
 
+      // Trigger thermal print (will prompt for connection if not already paired)
+      handleThermalPrint(invoice);
+
       // Restore focus to the product search so page is immediately interactive
       setTimeout(() => {
         window.focus();
@@ -456,6 +460,47 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
     } catch (error) {
       console.error('Error saving invoice:', error);
       toast.error('Failed to save invoice');
+    }
+  };
+
+  const handleThermalPrint = async (invoiceData?: Invoice) => {
+    try {
+      // Use provided invoice (from save) or calculate current one
+      let printData: Invoice;
+      
+      if (invoiceData) {
+        printData = invoiceData;
+      } else {
+        if (!selectedCustomer || invoiceItems.length === 0) {
+          toast.error('Nothing to print. Add items first.');
+          return;
+        }
+        const { subtotal, totalTax, totalAmount } = calculateTotals();
+        printData = {
+          invoiceId: 'PREVIEW',
+          customerId: selectedCustomer.customerId,
+          customerName: selectedCustomer.name,
+          date: new Date(),
+          items: invoiceItems,
+          discount: discount,
+          subtotal: subtotal,
+          totalTax: totalTax,
+          totalAmount: totalAmount,
+          paidStatus: 'paid',
+          syncStatus: 'pending',
+          lastModified: new Date()
+        };
+      }
+
+      const success = await thermalPrinter.printInvoice(printData, storeInfo);
+      if (success) {
+        toast.success('Thermal receipt printed');
+      } else {
+        toast.info('Please connect your USB Thermal Printer first.');
+      }
+    } catch (error) {
+      console.error('Thermal print error:', error);
+      toast.error('Thermal printing failed');
     }
   };
 
@@ -474,14 +519,24 @@ export function BillingScreen({ onBack }: BillingScreenProps) {
             <p style={{ color: 'var(--color-textSecondary)' }}>POS Billing Screen</p>
           </div>
         </div>
-        <Button
-          onClick={saveInvoice}
-          style={{ backgroundColor: 'var(--color-success)', color: '#fff' }}
-          className="hover:opacity-90"
-        >
-          <Receipt className="h-4 w-4 mr-2" />
-          Save Invoice
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => handleThermalPrint()}
+            variant="outline"
+            className="border-primary text-primary hover:bg-primary/10"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Thermal Print
+          </Button>
+          <Button
+            onClick={saveInvoice}
+            style={{ backgroundColor: 'var(--color-success)', color: '#fff' }}
+            className="hover:opacity-90"
+          >
+            <Receipt className="h-4 w-4 mr-2" />
+            Save Invoice
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

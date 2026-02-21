@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,11 +11,13 @@ import {
   Calendar,
   DollarSign,
   Eye,
-  Filter
+  Filter,
+  Printer
 } from 'lucide-react';
 import { billingDB } from '@/lib/database';
 import { Invoice } from '@/types/billing';
 import { PDFGenerator } from '@/lib/pdf-generator';
+import { thermalPrinter } from '@/lib/thermal-printer';
 import { toast } from 'sonner';
 
 interface InvoiceHistoryProps {
@@ -37,14 +39,6 @@ export function InvoiceHistory({ onBack }: InvoiceHistoryProps) {
     email: 'store@example.com'
   };
 
-  useEffect(() => {
-    loadInvoices();
-  }, []);
-
-  useEffect(() => {
-    filterInvoices();
-  }, [invoices, searchQuery, statusFilter]);
-
   const loadInvoices = async () => {
     try {
       const invoiceList = await billingDB.getInvoices();
@@ -57,7 +51,11 @@ export function InvoiceHistory({ onBack }: InvoiceHistoryProps) {
     }
   };
 
-  const filterInvoices = () => {
+  useEffect(() => {
+    loadInvoices();
+  }, []);
+
+  const filterInvoices = useCallback(() => {
     let filtered = invoices;
 
     // Filter by search query
@@ -74,7 +72,11 @@ export function InvoiceHistory({ onBack }: InvoiceHistoryProps) {
     }
 
     setFilteredInvoices(filtered);
-  };
+  }, [invoices, searchQuery, statusFilter]);
+
+  useEffect(() => {
+    filterInvoices();
+  }, [filterInvoices]);
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -95,6 +97,20 @@ export function InvoiceHistory({ onBack }: InvoiceHistoryProps) {
     } catch (error) {
       console.error('Error downloading invoice:', error);
       toast.error('Failed to download invoice');
+    }
+  };
+
+  const printThermal = async (invoice: Invoice) => {
+    try {
+      const success = await thermalPrinter.printInvoice(invoice, storeInfo);
+      if (success) {
+        toast.success('Thermal receipt printed');
+      } else {
+        toast.info('Please connect your USB Thermal Printer first.');
+      }
+    } catch (error) {
+      console.error('Thermal print error:', error);
+      toast.error('Thermal printing failed');
     }
   };
 
@@ -295,6 +311,15 @@ export function InvoiceHistory({ onBack }: InvoiceHistoryProps) {
                       onClick={() => downloadInvoicePDF(invoice)}
                     >
                       <Download className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => printThermal(invoice)}
+                      className="border-primary text-primary hover:bg-primary/10"
+                    >
+                      <Printer className="h-4 w-4" />
                     </Button>
                     
                     <Select 
