@@ -74,7 +74,8 @@ export function CustomerManager({ onBack }: CustomerManagerProps) {
         billingDB.getCustomers(),
         billingDB.getInvoices()
       ]);
-      setCustomers(customerList);
+      // Exclude the built-in Cash-in-Hand walk-in — it's managed in the billing screen
+      setCustomers(customerList.filter(c => !c.isCashInHand));
       setInvoices(invoiceList);
     } catch (error) {
       console.error('Error loading data:', error);

@@ -53,6 +53,7 @@ function AppContent() {
   const initializeApp = async () => {
     try {
       await billingDB.init();
+      await billingDB.ensureCashInHandCustomer();
       setIsInitialized(true);
       
       // Add sample data if database is empty

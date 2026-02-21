@@ -6,7 +6,7 @@ export interface Product {
   taxRate: number;
   stockQty: number;
   shortcutKey?: string; // New field for shortcut keys
-  syncStatus: 'synced' | 'pending';
+  syncStatus: "synced" | "pending";
   lastModified: Date;
 }
 
@@ -16,7 +16,8 @@ export interface Customer {
   phone: string;
   email: string;
   address: string;
-  syncStatus: 'synced' | 'pending';
+  isCashInHand?: boolean;
+  syncStatus: "synced" | "pending";
   lastModified: Date;
 }
 
@@ -39,8 +40,8 @@ export interface Invoice {
   subtotal: number;
   totalTax: number;
   totalAmount: number;
-  paidStatus: 'paid' | 'pending' | 'overdue';
-  syncStatus: 'synced' | 'pending';
+  paidStatus: "paid" | "pending" | "overdue";
+  syncStatus: "synced" | "pending";
   lastModified: Date;
 }
 
@@ -54,8 +55,12 @@ export interface StoreInfo {
 
 export interface SyncQueueItem {
   id: string;
-  type: 'product' | 'customer' | 'invoice';
-  action: 'create' | 'update' | 'delete';
-  data: Product | Customer | Invoice | { productId?: string; customerId?: string; invoiceId?: string };
+  type: "product" | "customer" | "invoice";
+  action: "create" | "update" | "delete";
+  data:
+    | Product
+    | Customer
+    | Invoice
+    | { productId?: string; customerId?: string; invoiceId?: string };
   timestamp: Date;
 }
